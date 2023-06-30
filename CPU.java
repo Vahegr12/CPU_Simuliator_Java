@@ -1,67 +1,28 @@
 import java.io.File;
-import java.io.FileNotFoundException;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Scanner;
 
 public class CPU {
-    private Map <String, Byte> registers;
+    private Map<String, Byte> registers;
     private byte[] memory;
     private byte programCounter;
-    String path = "commands.txt";
-    private File file;
-    private Scanner scanner;
 
-    public CPU() throws FileNotFoundException {
+    public CPU() {
         registers = new HashMap<>();
-        registers.put("AYB", (byte)0);
-        registers.put("BEN", (byte)0);
-        registers.put("GIM", (byte)0);
-        registers.put("DA", (byte)0);
-        registers.put("EC", (byte)0);
-        registers.put("ZA", (byte)0);
+        registers.put("AYB", (byte) 0);
+        registers.put("BEN", (byte) 0);
+        registers.put("GIM", (byte) 0);
+        registers.put("DA", (byte) 0);
+        registers.put("EC", (byte) 0);
+        registers.put("ZA", (byte) 0);
 
-
-        memory = new byte[32];
+        memory = new byte[32]; // Memory size of 32 bytes
         programCounter = 0;
-
-        file = new File(path);
-        scanner = new Scanner(file);
     }
 
-    private byte getOperatorID(String in) {
-        byte out = 0;
-        switch (in) {
-            case "ADD":
-                out = (byte) (1);
-                break;
-            case "SUB":
-                out = (byte) (2);
-                break;
-            case "MUL":
-                out = (byte) (3);
-                break;
-            case "DIV":
-                out = (byte) (4);
-                break;
-        }
-        return out;
-    }
-    public void readFromFile(){
-
-        String operator;
-        operator = scanner.nextLine();
-        int i = 0;
-        String[] operators = operator.split(" ");
-        while(operator != null){
-            memory[i] = (getOperatorID(operators[0]));
-            memory[i+1] = (byte)Integer.parseInt(operators[1]);
-            memory[i+2] = (byte)Integer.parseInt(operators[2]);
-            operator = scanner.nextLine();
-            i += 3;
-        }
-
-    }
     public void loadValueIntoRegister(String registerName, byte value) {
         if (registers.containsKey(registerName)) {
             registers.put(registerName, value);
@@ -115,11 +76,11 @@ public class CPU {
         byte value2 = registers.get(register2);
 
         if (value1 > value2) {
-            registers.put("DA", (byte)1); // Greater than
+            registers.put("DA", (byte) 1); // Greater than
         } else if (value1 == value2) {
-            registers.put("DA", (byte)0); // Equal
+            registers.put("DA", (byte) 0); // Equal
         } else {
-            registers.put("DA", (byte)-1); // Less than
+            registers.put("DA", (byte) -1); // Less than
         }
     }
 
@@ -164,7 +125,7 @@ public class CPU {
     }
 
     public void writeMemory(byte address, byte value) {
-        if (address >= 0 && address < memory.length) {
+        if (address >= 4 && address < memory.length) {
             memory[address] = value;
         } else {
             System.out.println("Invalid memory address: " + address);
@@ -172,12 +133,94 @@ public class CPU {
     }
 
     public byte readMemory(byte address) {
-        if (address >= 0 && address < memory.length) {
+        if (address >= 4 && address < memory.length) {
             return memory[address];
         } else {
             System.out.println("Invalid memory address: " + address);
+            return 0;
         }
-        return 0;
     }
 
+    public void executeProgramFromFile(String filePath) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(" ");
+                if (parts.length >= 3) {
+                    String instruction = parts[0];
+                    String operand1 = parts[1];
+                    String operand2 = parts[2];
+
+                    if(operand2.matches("\\d+")) {
+                        byte value = Byte.parseByte(operand2);
+                        switch (instruction) {
+                            case "MOV":
+                                loadValueIntoRegister(operand1, value);
+                                break;
+                            case "ADD":
+                                performArithmeticOperation("ADD", operand1, value);
+                                break;
+                            case "SUB":
+                                performArithmeticOperation("SUB", operand1, value);
+                                break;
+                            case "MUL":
+                                performArithmeticOperation("MUL", operand1, value);
+                                break;
+                            case "DIV":
+                                performArithmeticOperation("DIV", operand1, value);
+                                break;
+                            case "JMP":
+                            case "JG":
+                            case "JL":
+                            case "JE":
+                                jump(instruction, value);
+                                break;
+                            case "MOV_MEM":
+                                writeMemory(value, registers.get(operand1));
+                                break;
+                            default:
+                                System.out.println("Invalid instruction: " + instruction);
+                                break;
+                        }
+                    }
+                    else if () {
+
+                    } else{
+                        switch (instruction) {
+                            case "MOV":
+                                loadValueIntoRegister(operand1, registers.get(operand2));
+                                break;
+                            case "ADD":
+                                performArithmeticOperation("ADD", operand1, registers.get(operand2));
+                                break;
+                            case "SUB":
+                                performArithmeticOperation("SUB", operand1, registers.get(operand2));
+                                break;
+                            case "MUL":
+                                performArithmeticOperation("MUL", operand1, registers.get(operand2));
+                                break;
+                            case "DIV":
+                                performArithmeticOperation("DIV", operand1, registers.get(operand2));
+                                break;
+                            case "JMP":
+                            case "JG":
+                            case "JL":
+                            case "JE":
+                                jump(instruction, registers.get(operand2));
+                                break;
+                            case "MOV_MEM":
+                                writeMemory(registers.get(operand2), registers.get(operand1));
+                                break;
+                            default:
+                                System.out.println("Invalid instruction: " + instruction);
+                                break;
+                        }
+                    }
+
+                }
+            }
+        } catch (IOException e) {
+            System.out.println("Error reading the file: " + e.getMessage());
+        }
+    }
 }
