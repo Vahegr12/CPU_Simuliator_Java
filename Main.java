@@ -1,14 +1,8 @@
-class Main {
-        public static void main(String[]args){
+public class Main {
+    public static void main(String[] args) {
+        String path = "C:\\Users\\vaheg\\IdeaProjects\\CPU\\src\\commands.txt";
         CPU cpu = new CPU();
-
-        cpu.loadValueIntoRegister("AYB",5);
-        cpu.performArithmeticOperation("ADD","AYB",3);
-        cpu.compareRegisters("AYB","BEN");
+        cpu.executeProgramFromFile(path);
         cpu.printRegisters();
-
-        cpu.writeMemory(0,10);
-        int value=cpu.readMemory(0);
-        System.out.println("Memory value: " + value);
-        }
     }
+}
