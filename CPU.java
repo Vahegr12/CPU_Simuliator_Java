@@ -1,14 +1,12 @@
-import java.io.File;
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
 import java.util.HashMap;
 import java.util.Map;
 
 public class CPU {
-    private Map<String, Byte> registers;
-    private byte[] memory;
-    private byte programCounter;
+    private final Map<String, Byte> registers;
+//    private final Map<String, Runnable> opers;
+    private final byte[] memory;
+//    private final byte programCounter;
 
     public CPU() {
         registers = new HashMap<>();
@@ -19,95 +17,67 @@ public class CPU {
         registers.put("EC", (byte) 0);
         registers.put("ZA", (byte) 0);
 
+//        opers = new HashMap<>();
+//        opers.put("MOV", MOV);
+
+
         memory = new byte[32]; // Memory size of 32 bytes
-        programCounter = 0;
+//        programCounter = 0;
     }
 
-    public void loadValueIntoRegister(String registerName, byte value) {
-        if (registers.containsKey(registerName)) {
-            registers.put(registerName, value);
-        } else {
-            System.out.println("Invalid register name: " + registerName);
+    public String corrLValue(String in) {
+        if (in.matches("[A-Z]+") && registers.containsKey(in)){
+            return "R:" + in;
         }
+        else if (in.charAt(0) == '[' && in.charAt(in.length()-1) == ']'){
+            byte addr_byte = 34;
+            try {
+                in = in.substring(1, in.length() - 1);
+                if (!in.matches("\\d+")){
+                    return null;
+                }
+                addr_byte = Byte.parseByte(in);
+            }
+            catch (NumberFormatException e) {
+                System.out.println("Invalid input: " + in + " is not an address");
+            }
+            if (addr_byte >= (byte) 0 && addr_byte <= (byte) 32) {
+                return "A:" + addr_byte;
+            }
+            else {
+                System.out.println("Invalid input: " + in + " is out of bounds");
+            }
+        }
+        return null;
     }
-
-    public void performArithmeticOperation(String operation, String registerName, byte value) {
-        if (!registers.containsKey(registerName)) {
-            System.out.println("Invalid register name: " + registerName);
-            return;
+    public String corrRValue(String in){
+        if (in.matches("[A-Z]+") && registers.containsKey(in)){
+            return "R:" + in;
         }
-
-        byte registerValue = registers.get(registerName);
-        byte result;
-
-        switch (operation) {
-            case "ADD":
-                result = (byte) (registerValue + value);
-                break;
-            case "SUB":
-                result = (byte) (registerValue - value);
-                break;
-            case "MUL":
-                result = (byte) (registerValue * value);
-                break;
-            case "DIV":
-                if (value != 0) {
-                    result = (byte) (registerValue / value);
-                } else {
-                    System.out.println("Division by zero!");
-                    return;
+        else if (in.charAt(0) == '[' && in.charAt(in.length()-1) == ']'){
+            byte addr_byte = 34;
+            try {
+                in = in.substring(1, in.length() - 1);
+                if (!in.matches("\\d+")){
+                    return null;
                 }
-                break;
-            default:
-                System.out.println("Invalid arithmetic operation: " + operation);
-                return;
+                addr_byte = Byte.parseByte(in);
+            }
+            catch (NumberFormatException e) {
+                System.out.println("Invalid input: " + in + " is not an address");
+            }
+            if (addr_byte >= (byte) 0 && addr_byte <= (byte) 32) {
+                return "A:" + addr_byte;
+            }
+            else {
+                System.out.println("Invalid input: " + in + " is out of bounds");
+            }
         }
-
-        registers.put(registerName, result);
-    }
-
-    public void compareRegisters(String register1, String register2) {
-        if (!registers.containsKey(register1) || !registers.containsKey(register2)) {
-            System.out.println("Invalid register name");
-            return;
+        else if (in.matches("\\d+")){
+            byte value = Byte.parseByte(in);
+            return "L:" + in;
         }
-
-        byte value1 = registers.get(register1);
-        byte value2 = registers.get(register2);
-
-        if (value1 > value2) {
-            registers.put("DA", (byte) 1); // Greater than
-        } else if (value1 == value2) {
-            registers.put("DA", (byte) 0); // Equal
-        } else {
-            registers.put("DA", (byte) -1); // Less than
-        }
-    }
-
-    public void jump(String instruction, byte address) {
-        switch (instruction) {
-            case "JMP":
-                programCounter = address;
-                break;
-            case "JG":
-                if (registers.get("DA") == 1) {
-                    programCounter = address;
-                }
-                break;
-            case "JL":
-                if (registers.get("DA") == -1) {
-                    programCounter = address;
-                }
-                break;
-            case "JE":
-                if (registers.get("DA") == 0) {
-                    programCounter = address;
-                }
-                break;
-            default:
-                System.out.println("Invalid jump instruction: " + instruction);
-                break;
-        }
+        return null;
     }
 
     public void dumpMemory() {
@@ -125,7 +95,7 @@ public class CPU {
     }
 
     public void writeMemory(byte address, byte value) {
-        if (address >= 4 && address < memory.length) {
+        if (address >= 0 && address < memory.length) {
             memory[address] = value;
         } else {
             System.out.println("Invalid memory address: " + address);
@@ -133,7 +103,7 @@ public class CPU {
     }
 
     public byte readMemory(byte address) {
-        if (address >= 4 && address < memory.length) {
+        if (address >= 0 && address < memory.length) {
             return memory[address];
         } else {
             System.out.println("Invalid memory address: " + address);
@@ -141,85 +111,579 @@ public class CPU {
         }
     }
 
-    public void executeProgramFromFile(String filePath) {
-        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+    public boolean MOV(String L, String R) {
+        L = corrLValue(L);
+        R = corrRValue(R);
+        if (L == null || R == null){
+            System.out.println("Invalid operation!");
+        }
+        else{
+            char L_type = L.charAt(0);
+            L = L.substring(2, L.length());
+            char R_type = R.charAt(0);
+            R = R.substring(2, R.length());
+            switch (L_type){
+                case 'R':
+                    // code for MOV to register
+                    if(R_type == 'L') {
+                        registers.put(L, Byte.parseByte(R));
+                        return registers.get(L) == Byte.parseByte(R);
+                    }
+                    if(R_type == 'A'){
+                        registers.put(L, readMemory(Byte.parseByte(R)));
+                        return registers.get(L) == readMemory(Byte.parseByte(R));
+                    }
+                    if(R_type == 'R'){
+                        registers.put(L, registers.get(R));
+                        return registers.get(L) == registers.get(R);
+                    }
+                    break;
+                case 'A':
+                    if(R_type == 'L') {
+                        writeMemory(Byte.parseByte(L),Byte.parseByte(R));
+                        return readMemory(Byte.parseByte(L)) == Byte.parseByte(R);
+                    }
+                    if(R_type == 'A'){
+                        writeMemory(Byte.parseByte(L),readMemory(Byte.parseByte(R)));
+                        return readMemory(Byte.parseByte(L)) == readMemory(Byte.parseByte(R));
+                    }
+                    if(R_type == 'R'){
+                        writeMemory(Byte.parseByte(L), registers.get(R));
+                        return readMemory(Byte.parseByte(L)) == registers.get(R);
+                    }
+                    break;
+
+            }
+        }
+        return false;
+    }
+
+    public boolean ADD(String L, String R){
+        L = corrLValue(L);
+        R = corrRValue(R);
+        if (L == null || R == null){
+            System.out.println("Invalid operation!");
+            return false;
+        }
+            char L_type = L.charAt(0);
+            L = L.substring(2, L.length());
+            char R_type = R.charAt(0);
+            R = R.substring(2, R.length());
+            switch (L_type){
+                case 'R':
+                    // code for MOV to register
+                    if(R_type == 'L') {
+                        registers.put(L, (byte)(Integer.parseInt(R) + registers.get(L)));
+                        return registers.get(L) == (byte) (Integer.parseInt(R) + registers.get(L));
+                    }
+                    if(R_type == 'A'){
+                        registers.put(L, (byte)(readMemory(Byte.parseByte(R)) + registers.get(L)));
+                        return registers.get(L) == (byte) (readMemory(Byte.parseByte(R)) + registers.get(L));
+                    }
+                    if(R_type == 'R'){
+                        registers.put(L, (byte)(registers.get(R) + registers.get(L)));
+                        return registers.get(L) == (byte) (registers.get(R) + registers.get(L));
+                    }
+                    break;
+                case 'A':
+                    if(R_type == 'L') {
+                        writeMemory(Byte.parseByte(L),(byte)(Integer.parseInt(R) + readMemory(Byte.parseByte(L))));
+                        return readMemory(Byte.parseByte(L)) == (byte) (Integer.parseInt(R) + readMemory(Byte.parseByte(L)));
+                    }
+                    if(R_type == 'A'){
+                        writeMemory(Byte.parseByte(L),(byte)(readMemory(Byte.parseByte(L)) + readMemory(Byte.parseByte(L))));
+                        return readMemory(Byte.parseByte(L)) == (byte) (readMemory(Byte.parseByte(L)) + readMemory(Byte.parseByte(L)));
+                    }
+                    if(R_type == 'R'){
+                        writeMemory(Byte.parseByte(L), (byte)(registers.get(R) + readMemory(Byte.parseByte(L))));
+                        return readMemory(Byte.parseByte(L)) == (byte) (registers.get(R) + readMemory(Byte.parseByte(L)));
+                    }
+                    break;
+
+            }
+        return false;
+    }
+
+    public boolean SUB(String L, String R){
+        L = corrLValue(L);
+        R = corrRValue(R);
+        if (L == null || R == null){
+            System.out.println("Invalid operation!");
+            return false;
+        }
+        char L_type = L.charAt(0);
+        L = L.substring(2, L.length());
+        char R_type = R.charAt(0);
+        R = R.substring(2, R.length());
+        switch (L_type){
+            case 'R':
+                // code for MOV to register
+                if(R_type == 'L') {
+                    registers.put(L, (byte)(Integer.parseInt(R) - registers.get(L)));
+                    return registers.get(L) == (byte) (Integer.parseInt(R) - registers.get(L));
+                }
+                if(R_type == 'A'){
+                    registers.put(L, (byte)(readMemory(Byte.parseByte(R)) - registers.get(L)));
+                    return registers.get(L) == (byte) (readMemory(Byte.parseByte(R)) - registers.get(L));
+                }
+                if(R_type == 'R'){
+                    registers.put(L, (byte)(registers.get(R) - registers.get(L)));
+                    return registers.get(L) == (byte) (registers.get(R) - registers.get(L));
+                }
+                break;
+            case 'A':
+                if(R_type == 'L') {
+                    writeMemory(Byte.parseByte(L),(byte)(Integer.parseInt(R) - readMemory(Byte.parseByte(L))));
+                    return readMemory(Byte.parseByte(L)) == (byte) (Integer.parseInt(R) - readMemory(Byte.parseByte(L)));
+                }
+                if(R_type == 'A'){
+                    writeMemory(Byte.parseByte(L),(byte)(readMemory(Byte.parseByte(L)) - readMemory(Byte.parseByte(L))));
+                    return readMemory(Byte.parseByte(L)) == (byte) (readMemory(Byte.parseByte(L)) - readMemory(Byte.parseByte(L)));
+                }
+                if(R_type == 'R'){
+                    writeMemory(Byte.parseByte(L), (byte)(registers.get(R) - readMemory(Byte.parseByte(L))));
+                    return readMemory(Byte.parseByte(L)) == (byte) (registers.get(R) - readMemory(Byte.parseByte(L)));
+                }
+                break;
+
+        }
+        return false;
+    }
+
+    public boolean MUL(String L, String R){
+        L = corrLValue(L);
+        R = corrRValue(R);
+        if (L == null || R == null){
+            System.out.println("Invalid operation!");
+            return false;
+        }
+        char L_type = L.charAt(0);
+        L = L.substring(2, L.length());
+        char R_type = R.charAt(0);
+        R = R.substring(2, R.length());
+        switch (L_type){
+            case 'R':
+                // code for MOV to register
+                if(R_type == 'L') {
+                    registers.put(L, (byte)(Integer.parseInt(R) * registers.get(L)));
+                    return registers.get(L) == (byte) (Integer.parseInt(R) * registers.get(L));
+                }
+                if(R_type == 'A'){
+                    registers.put(L, (byte)(readMemory(Byte.parseByte(R)) * registers.get(L)));
+                    return registers.get(L) == (byte) (readMemory(Byte.parseByte(R)) * registers.get(L));
+                }
+                if(R_type == 'R'){
+                    registers.put(L, (byte)(registers.get(R) * registers.get(L)));
+                    return registers.get(L) == (byte) (registers.get(R) * registers.get(L));
+                }
+                break;
+            case 'A':
+                if(R_type == 'L') {
+                    writeMemory(Byte.parseByte(L),(byte)(Integer.parseInt(R) * readMemory(Byte.parseByte(L))));
+                    return readMemory(Byte.parseByte(L)) == (byte) (Integer.parseInt(R) * readMemory(Byte.parseByte(L)));
+                }
+                if(R_type == 'A'){
+                    writeMemory(Byte.parseByte(L),(byte)(readMemory(Byte.parseByte(L)) * readMemory(Byte.parseByte(L))));
+                    return readMemory(Byte.parseByte(L)) == (byte) (readMemory(Byte.parseByte(L)) * readMemory(Byte.parseByte(L)));
+                }
+                if(R_type == 'R'){
+                    writeMemory(Byte.parseByte(L), (byte)(registers.get(R) * readMemory(Byte.parseByte(L))));
+                    return readMemory(Byte.parseByte(L)) == (byte) (registers.get(R) * readMemory(Byte.parseByte(L)));
+                }
+                break;
+
+        }
+        return false;
+    }
+
+    public boolean DIV(String L, String R){
+        L = corrLValue(L);
+        R = corrRValue(R);
+        if (L == null || R == null){
+            System.out.println("Invalid operation!");
+            return false;
+        }
+        char L_type = L.charAt(0);
+        L = L.substring(2, L.length());
+        char R_type = R.charAt(0);
+        R = R.substring(2, R.length());
+        switch (L_type){
+            case 'R':
+                // code for MOV to register
+                if(R_type == 'L') {
+                    registers.put(L, (byte)(Integer.parseInt(R) / registers.get(L)));
+                    return registers.get(L) == (byte) (Integer.parseInt(R) / registers.get(L));
+                }
+                if(R_type == 'A'){
+                    registers.put(L, (byte)(readMemory(Byte.parseByte(R)) / registers.get(L)));
+                    return registers.get(L) == (byte) (readMemory(Byte.parseByte(R)) / registers.get(L));
+                }
+                if(R_type == 'R'){
+                    registers.put(L, (byte)(registers.get(R) / registers.get(L)));
+                    return registers.get(L) == (byte) (registers.get(R) / registers.get(L));
+                }
+                break;
+            case 'A':
+                if(R_type == 'L') {
+                    writeMemory(Byte.parseByte(L),(byte)(Integer.parseInt(R) / readMemory(Byte.parseByte(L))));
+                    return readMemory(Byte.parseByte(L)) == (byte) (Integer.parseInt(R) / readMemory(Byte.parseByte(L)));
+                }
+                if(R_type == 'A'){
+                    writeMemory(Byte.parseByte(L),(byte)(readMemory(Byte.parseByte(L)) / readMemory(Byte.parseByte(L))));
+                    return readMemory(Byte.parseByte(L)) == (byte) (readMemory(Byte.parseByte(L)) / readMemory(Byte.parseByte(L)));
+                }
+                if(R_type == 'R'){
+                    writeMemory(Byte.parseByte(L), (byte)(registers.get(R) / readMemory(Byte.parseByte(L))));
+                    return readMemory(Byte.parseByte(L)) == (byte) (registers.get(R) / readMemory(Byte.parseByte(L)));
+                }
+                break;
+
+        }
+        return false;
+    }
+
+    public boolean AND(String L, String R){
+        L = corrLValue(L);
+        R = corrRValue(R);
+        if (L == null || R == null){
+            System.out.println("Invalid operation!");
+            return false;
+        }
+        char L_type = L.charAt(0);
+        L = L.substring(2, L.length());
+        char R_type = R.charAt(0);
+        R = R.substring(2, R.length());
+        switch (L_type){
+            case 'R':
+                // code for MOV to register
+                if(R_type == 'L') {
+                    registers.put(L, (byte)(Integer.parseInt(R) & registers.get(L)));
+                    return registers.get(L) == (byte) (Integer.parseInt(R) & registers.get(L));
+                }
+                if(R_type == 'A'){
+                    registers.put(L, (byte)(readMemory(Byte.parseByte(R)) & registers.get(L)));
+                    return registers.get(L) == (byte) (readMemory(Byte.parseByte(R)) & registers.get(L));
+                }
+                if(R_type == 'R'){
+                    registers.put(L, (byte)(registers.get(R) & registers.get(L)));
+                    return registers.get(L) == (byte) (registers.get(R) & registers.get(L));
+                }
+                break;
+            case 'A':
+                if(R_type == 'L') {
+                    writeMemory(Byte.parseByte(L),(byte)(Integer.parseInt(R) & readMemory(Byte.parseByte(L))));
+                    return readMemory(Byte.parseByte(L)) == (byte) (Integer.parseInt(R) & readMemory(Byte.parseByte(L)));
+                }
+                if(R_type == 'A'){
+                    writeMemory(Byte.parseByte(L),(byte)(readMemory(Byte.parseByte(L)) & readMemory(Byte.parseByte(L))));
+                    return readMemory(Byte.parseByte(L)) == (byte) (readMemory(Byte.parseByte(L)) & readMemory(Byte.parseByte(L)));
+                }
+                if(R_type == 'R'){
+                    writeMemory(Byte.parseByte(L), (byte)(registers.get(R) & readMemory(Byte.parseByte(L))));
+                    return readMemory(Byte.parseByte(L)) == (byte) (registers.get(R) & readMemory(Byte.parseByte(L)));
+                }
+                break;
+
+        }
+        return false;
+    }
+
+    public boolean OR(String L, String R){
+        L = corrLValue(L);
+        R = corrRValue(R);
+        if (L == null || R == null){
+            System.out.println("Invalid operation!");
+            return false;
+        }
+        char L_type = L.charAt(0);
+        L = L.substring(2, L.length());
+        char R_type = R.charAt(0);
+        R = R.substring(2, R.length());
+        switch (L_type){
+            case 'R':
+                // code for MOV to register
+                if(R_type == 'L') {
+                    registers.put(L, (byte)(Integer.parseInt(R) | registers.get(L)));
+                    return registers.get(L) == (byte) (Integer.parseInt(R) | registers.get(L));
+                }
+                if(R_type == 'A'){
+                    registers.put(L, (byte)(readMemory(Byte.parseByte(R)) | registers.get(L)));
+                    return registers.get(L) == (byte) (readMemory(Byte.parseByte(R)) | registers.get(L));
+                }
+                if(R_type == 'R'){
+                    registers.put(L, (byte)(registers.get(R) | registers.get(L)));
+                    return registers.get(L) == (byte) (registers.get(R) | registers.get(L));
+                }
+                break;
+            case 'A':
+                if(R_type == 'L') {
+                    writeMemory(Byte.parseByte(L),(byte)(Integer.parseInt(R) | readMemory(Byte.parseByte(L))));
+                    return readMemory(Byte.parseByte(L)) == (byte) (Integer.parseInt(R) | readMemory(Byte.parseByte(L)));
+                }
+                if(R_type == 'A'){
+                    writeMemory(Byte.parseByte(L),(byte)(readMemory(Byte.parseByte(L)) | readMemory(Byte.parseByte(L))));
+                    return readMemory(Byte.parseByte(L)) == (byte) (readMemory(Byte.parseByte(L)) | readMemory(Byte.parseByte(L)));
+                }
+                if(R_type == 'R'){
+                    writeMemory(Byte.parseByte(L), (byte)(registers.get(R) | readMemory(Byte.parseByte(L))));
+                    return readMemory(Byte.parseByte(L)) == (byte) (registers.get(R) | readMemory(Byte.parseByte(L)));
+                }
+                break;
+
+        }
+        return false;
+    }
+
+    public boolean XOR(String L, String R){
+        L = corrLValue(L);
+        R = corrRValue(R);
+        if (L == null || R == null){
+            System.out.println("Invalid operation!");
+            return false;
+        }
+        char L_type = L.charAt(0);
+        L = L.substring(2, L.length());
+        char R_type = R.charAt(0);
+        R = R.substring(2, R.length());
+        switch (L_type){
+            case 'R':
+                // code for MOV to register
+                if(R_type == 'L') {
+                    registers.put(L, (byte)(Integer.parseInt(R) ^ registers.get(L)));
+                    return registers.get(L) == (byte) (Integer.parseInt(R) ^ registers.get(L));
+                }
+                if(R_type == 'A'){
+                    registers.put(L, (byte)(readMemory(Byte.parseByte(R)) ^ registers.get(L)));
+                    return registers.get(L) == (byte) (readMemory(Byte.parseByte(R)) ^ registers.get(L));
+                }
+                if(R_type == 'R'){
+                    registers.put(L, (byte)(registers.get(R) ^ registers.get(L)));
+                    return registers.get(L) == (byte) (registers.get(R) ^ registers.get(L));
+                }
+                break;
+            case 'A':
+                if(R_type == 'L') {
+                    writeMemory(Byte.parseByte(L),(byte)(Integer.parseInt(R) ^ readMemory(Byte.parseByte(L))));
+                    return readMemory(Byte.parseByte(L)) == (byte) (Integer.parseInt(R) ^ readMemory(Byte.parseByte(L)));
+                }
+                if(R_type == 'A'){
+                    writeMemory(Byte.parseByte(L),(byte)(readMemory(Byte.parseByte(L)) ^ readMemory(Byte.parseByte(L))));
+                    return readMemory(Byte.parseByte(L)) == (byte) (readMemory(Byte.parseByte(L)) ^ readMemory(Byte.parseByte(L)));
+                }
+                if(R_type == 'R'){
+                    writeMemory(Byte.parseByte(L), (byte)(registers.get(R) ^ readMemory(Byte.parseByte(L))));
+                    return readMemory(Byte.parseByte(L)) == (byte) (registers.get(R) ^ readMemory(Byte.parseByte(L)));
+                }
+                break;
+
+        }
+        return false;
+    }
+
+    public boolean CMP(String L, String R){
+        L = corrLValue(L);
+        R = corrRValue(R);
+        if (L == null || R == null){
+            System.out.println("Invalid operation!");
+            return false;
+        }
+        char L_type = L.charAt(0);
+        L = L.substring(2, L.length());
+        char R_type = R.charAt(0);
+        R = R.substring(2, R.length());
+        switch (L_type){
+            case 'R':
+                // code for MOV to register
+                if(R_type == 'L') {
+                    if((Byte.parseByte(R) > registers.get(L))){
+                        registers.put("DA", (byte)-1);
+                    }
+                    else if ((Integer.parseInt(R) < registers.get(L))){
+                        registers.put("DA", (byte)1);
+                    }
+                    else if ((Integer.parseInt(R) == registers.get(L))){
+                        registers.put("DA", (byte)0);
+                    }
+                    return false;
+
+                }
+                if(R_type == 'A'){
+                    if(readMemory(Byte.parseByte(R)) > registers.get(L)){
+                        registers.put("DA", (byte)-1);
+                    }
+                    else if (readMemory(Byte.parseByte(R)) < registers.get(L)){
+                        registers.put("DA", (byte)1);
+                    }
+                    else if (readMemory(Byte.parseByte(R)) == registers.get(L)){
+                        registers.put("DA", (byte)0);
+                    }
+                    return false;
+
+                }
+                if(R_type == 'R'){
+                    if(registers.get(R) > registers.get(L)){
+                        registers.put("DA", (byte)-1);
+                    }
+                    else if (registers.get(R) < registers.get(L)){
+                        registers.put("DA", (byte)1);
+                    }
+                    else if (registers.get(R) == registers.get(L)){
+                        registers.put("DA", (byte)0);
+                    }
+                    return false;
+
+                }
+                break;
+            case 'A':
+                if(R_type == 'L') {
+                    if(Byte.parseByte(R) > readMemory(Byte.parseByte(L))){
+                        registers.put("DA", (byte)-1);
+                    }
+                    else if (Byte.parseByte(R) < readMemory(Byte.parseByte(L))){
+                        registers.put("DA", (byte)1);
+                    }
+                    else if (Byte.parseByte(R) == readMemory(Byte.parseByte(L))){
+                        registers.put("DA", (byte)0);
+                    }
+                    return false;
+
+                }
+                if(R_type == 'A'){
+                    if(readMemory(Byte.parseByte(R)) > readMemory(Byte.parseByte(L))){
+                        registers.put("DA", (byte)-1);
+                    }
+                    else if (readMemory(Byte.parseByte(R)) < readMemory(Byte.parseByte(L))){
+                        registers.put("DA", (byte)1);
+                    }
+                    else if (readMemory(Byte.parseByte(R)) == readMemory(Byte.parseByte(L))){
+                        registers.put("DA", (byte)0);
+                    }
+                    return false;
+
+                }
+                if(R_type == 'R'){
+                    if(registers.get(R) > readMemory(Byte.parseByte(L))){
+                        registers.put("DA", (byte)-1);
+                    }
+                    else if (registers.get(R) < readMemory(Byte.parseByte(L))){
+                        registers.put("DA", (byte)1);
+                    }
+                    else if (registers.get(R) == readMemory(Byte.parseByte(L))){
+                        registers.put("DA", (byte)0);
+                    }
+                    return false;
+
+                }
+                break;
+
+        }
+        return false;
+    }
+
+    public void JMP(int line){
+        // cheack DA register state;
+        // make cursor location` the start of file
+        // read line (forexample 4 time)
+        // exit, let exicuteprogramm() do its work from 4 line;
+    }
+    public void JL(int line){}
+    public void JG(int line){}
+    public void JE(int line){}
+
+
+
+    public void execute(String path){
+        try (BufferedReader reader = new BufferedReader(new FileReader(path))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 String[] parts = line.split(" ");
-                if (parts.length >= 3) {
+                if (parts.length == 2){
                     String instruction = parts[0];
-                    String operand1 = parts[1];
-                    String operand2 = parts[2];
+                    String value = parts[1];
 
-                    if(operand2.matches("\\d+")) {
-                        byte value = Byte.parseByte(operand2);
-                        switch (instruction) {
-                            case "MOV":
-                                loadValueIntoRegister(operand1, value);
-                                break;
-                            case "ADD":
-                                performArithmeticOperation("ADD", operand1, value);
-                                break;
-                            case "SUB":
-                                performArithmeticOperation("SUB", operand1, value);
-                                break;
-                            case "MUL":
-                                performArithmeticOperation("MUL", operand1, value);
-                                break;
-                            case "DIV":
-                                performArithmeticOperation("DIV", operand1, value);
-                                break;
-                            case "JMP":
-                            case "JG":
-                            case "JL":
-                            case "JE":
-                                jump(instruction, value);
-                                break;
-                            case "MOV_MEM":
-                                writeMemory(value, registers.get(operand1));
-                                break;
-                            default:
-                                System.out.println("Invalid instruction: " + instruction);
-                                break;
-                        }
+// code for jumps and Not operations
+                }
+                else if (parts.length == 3){
+                    String instruction = parts[0];
+                    String lvalue = parts[1];
+                    String rvalue = parts[2];
+
+// code for mov, ariphmetics and logic operation
+
+                    switch (instruction){
+                        case "MOV":
+                            if (MOV(lvalue,rvalue)){
+                                System.out.println(line + ConCol.GREEN + " DONE" + ConCol.RESET);
+                            }
+                            else {
+                                System.out.println(line + ConCol.RED + " FAILED" + ConCol.RESET);
+                            }
+                            break;
+                        case "ADD":
+                            if (ADD(lvalue,rvalue)){
+                                System.out.println(line + ConCol.GREEN + " DONE" + ConCol.RESET);
+                            }
+                            else {
+                                System.out.println(line + ConCol.RED + " FAILED" + ConCol.RESET);
+                            }
+                            break;
+                        case "SUB":
+                            if (SUB(lvalue,rvalue)){
+                                System.out.println(line + ConCol.GREEN + " DONE" + ConCol.RESET);
+                            }
+                            else {
+                                System.out.println(line + ConCol.RED + " FAILED" + ConCol.RESET);
+                            }
+                            break;
+                        case "MUL":
+                            if (MUL(lvalue,rvalue)){
+                                System.out.println(line + ConCol.GREEN + " DONE" + ConCol.RESET);
+                            }
+                            else {
+                                System.out.println(line + ConCol.RED + " FAILED" + ConCol.RESET);
+                            }
+                            break;
+                        case "DIV":
+                            if (DIV(lvalue,rvalue)){
+                                System.out.println(line + ConCol.GREEN + " DONE" + ConCol.RESET);
+                            }
+                            else {
+                                System.out.println(line + ConCol.RED + " FAILED" + ConCol.RESET);
+                            }
+                            break;
+                        case "AND":
+                            if (AND(lvalue,rvalue)){
+                                System.out.println(line + ConCol.GREEN + " DONE" + ConCol.RESET);
+                            }
+                            else {
+                                System.out.println(line + ConCol.RED + " FAILED" + ConCol.RESET);
+                            }
+                            break;
+                        case "OR":
+                            if (OR(lvalue,rvalue)){
+                                System.out.println(line + ConCol.GREEN + " DONE" + ConCol.RESET);
+                            }
+                            else {
+                                System.out.println(line + ConCol.RED + " FAILED" + ConCol.RESET);
+                            }
+                            break;
+                        case "XOR":
+                            if (XOR(lvalue,rvalue)){
+                                System.out.println(line + ConCol.GREEN + " DONE" + ConCol.RESET);
+                            }
+                            else {
+                                System.out.println(line + ConCol.RED + " FAILED" + ConCol.RESET);
+                            }
+                            break;
+                        case "CMP":
+                            CMP(lvalue,rvalue);
+                            System.out.println(line + ConCol.GREEN + " DONE" + ConCol.RESET);
+                            break;
                     }
-                    else if () {
-
-                    } else{
-                        switch (instruction) {
-                            case "MOV":
-                                loadValueIntoRegister(operand1, registers.get(operand2));
-                                break;
-                            case "ADD":
-                                performArithmeticOperation("ADD", operand1, registers.get(operand2));
-                                break;
-                            case "SUB":
-                                performArithmeticOperation("SUB", operand1, registers.get(operand2));
-                                break;
-                            case "MUL":
-                                performArithmeticOperation("MUL", operand1, registers.get(operand2));
-                                break;
-                            case "DIV":
-                                performArithmeticOperation("DIV", operand1, registers.get(operand2));
-                                break;
-                            case "JMP":
-                            case "JG":
-                            case "JL":
-                            case "JE":
-                                jump(instruction, registers.get(operand2));
-                                break;
-                            case "MOV_MEM":
-                                writeMemory(registers.get(operand2), registers.get(operand1));
-                                break;
-                            default:
-                                System.out.println("Invalid instruction: " + instruction);
-                                break;
-                        }
-                    }
-
                 }
             }
-        } catch (IOException e) {
+        }
+        catch (IOException e) {
             System.out.println("Error reading the file: " + e.getMessage());
         }
     }
